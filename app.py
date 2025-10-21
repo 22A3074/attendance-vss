@@ -1,40 +1,39 @@
 import streamlit as st
-import streamlit as st
-from PIL import Image
 import numpy as np
-import cv2
-import tempfile
-import webbrowser
+from PIL import Image
+import hashlib
 
-st.title("出席確認（視覚復号型秘密分散）")
+st.set_page_config(page_title="出席確認アプリ", layout="centered")
+st.title("🎓 視覚復号型秘密分散法による出席確認")
 
-# === 画像アップロード ===
-shareA = st.file_uploader("先生のシェア画像 (Share A)", type=["png", "jpg"])
-shareB = st.file_uploader("学生のシェア画像 (Share B)", type=["png", "jpg"])
+# --- シェアAを読み込み ---
+try:
+    shareA = np.array(Image.open("shareA.png").convert("1"), dtype=np.uint8)
+except FileNotFoundError:
+    st.error("shareA.png が見つかりません。教員側で生成してください。")
+    st.stop()
 
-if shareA and shareB:
-    # 画像読み込み
-    imgA = Image.open(shareA).convert("L")
-    imgB = Image.open(shareB).convert("L")
+# --- 学籍番号入力 ---
+student_id = st.text_input("あなたの学籍番号を入力してください（例：22A3074）")
 
-    # サイズ調整（片方のサイズに合わせる）
-    imgB = imgB.resize(imgA.size)
+# --- シェアBアップロード ---
+uploaded = st.file_uploader("あなたのシェアB画像をアップロードしてください（PNG）", type=["png"])
 
-    # numpy配列化
-    arrA = np.array(imgA)
-    arrB = np.array(imgB)
+# --- 復号処理 ---
+if student_id and uploaded:
+    imgB = np.array(Image.open(uploaded).convert("1"), dtype=np.uint8)
+    decoded = np.bitwise_xor(shareA, imgB)
 
-    # === 合成（ANDっぽく重ねる） ===
-    combined = np.minimum(arrA, arrB).astype(np.uint8)
+    st.image(decoded * 255, caption="復号結果", use_column_width=True)
 
-    st.image(combined, caption="合成結果", use_column_width=True)
+    # 正しいシェアかどうかを確認
+    # 正しいパターンを同様の方法で生成
+    seed = int(hashlib.sha256(student_id.encode()).hexdigest(), 16)
+    np.random.seed(seed)
+    true_pattern = np.random.randint(0, 2, shareA.shape, dtype=np.uint8)
+    expected = np.bitwise_xor(shareA, true_pattern)
 
-    # === QRコード読み取り ===
-    detector = cv2.QRCodeDetector()
-    data, points, _ = detector.detectAndDecode(combined)
-
-    if data:
-        st.success(f"QRコードを検出しました: {data}")
-        st.markdown(f"[👉 Googleフォームへ移動する]({data})")
+    if np.array_equal(decoded, expected):
+        st.success(f"✅ {student_id} さんの出席を確認しました！")
     else:
-        st.error("QRコードの読み取りに失敗しました。")
+        st.error("❌ このシェアは無効です。他の学生のシェアを使用していませんか？")
