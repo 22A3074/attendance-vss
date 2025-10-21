@@ -27,7 +27,6 @@ if student_id and uploaded:
     st.image(decoded * 255, caption="復号結果", use_column_width=True)
 
     # 正しいシェアかどうかを確認
-    # 正しいパターンを同様の方法で生成
     seed = int(hashlib.sha256(student_id.encode()).hexdigest(), 16)
     np.random.seed(seed)
     true_pattern = np.random.randint(0, 2, shareA.shape, dtype=np.uint8)
